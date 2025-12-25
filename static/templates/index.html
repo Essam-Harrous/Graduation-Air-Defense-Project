@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Military Turret Command Console</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="wrap">
+    <header class="top">
+      <div>
+        <div class="h1">AUTOMATED TARGETING TURRET</div>
+        <div class="h2">MILITARY COMMAND & CONTROL CONSOLE</div>
+      </div>
+      <div class="badge">OFFLINE AI + RADAR</div>
+    </header>
+
+    <div class="grid">
+      <section class="panel">
+        <div class="ptitle">LIVE FEED + RADAR OVERLAY</div>
+        <div class="videoBox">
+          <img id="video" src="/video" alt="stream" />
+          <canvas id="radar" width="400" height="200"></canvas>
+        </div>
+      </section>
+
+      <section class="panel side">
+        <div class="ptitle">CONTROL</div>
+
+        <div class="kv">
+          <div>STATE</div><div id="st">-</div>
+          <div>RADAR</div><div id="rad">-</div>
+          <div>PAN/TILT</div><div id="pt">-</div>
+          <div>LAST DETECTION</div><div id="det">-</div>
+          <div>AUTO ALARM</div><div id="aa">-</div>
+        </div>
+
+        <div class="btnRow">
+          <button id="center" class="btn gray">CENTER</button>
+          <button id="arm" class="btn yellow">ARM MANUAL FIRE: OFF</button>
+        </div>
+
+        <button id="fire" class="btn fire" disabled>FIRE (MANUAL)</button>
+
+        <div class="note">
+          <b>Rules:</b>
+          <ul>
+            <li>Radar must detect object first (Acquire).</li>
+            <li>AI confirms Pepsi and tracks it.</li>
+            <li>Auto alarm triggers for 5 seconds on Pepsi.</li>
+            <li>Manual FIRE requires ARM first.</li>
+          </ul>
+        </div>
+
+        <div class="ptitle" style="margin-top:10px;">EVENT LOG</div>
+        <div id="log" class="log"></div>
+      </section>
+    </div>
+  </div>
+
+  <div id="loading" class="sys-overlay">
+    <div class="sys-msg">
+      <div>SYSTEM INITIALIZING...</div>
+      <div class="blink">CONNECTING TO NEURAL NET</div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
