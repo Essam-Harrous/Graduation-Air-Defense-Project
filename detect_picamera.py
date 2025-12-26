@@ -225,9 +225,7 @@ def main():
                     print("❌ Failed to capture frame")
                     break
             else:
-                raw_frame = picam2.capture_array()
-                # Fix color swap: Camera BGR config seems to return RGB or vice-versa
-                frame_bgr = cv2.cvtColor(raw_frame, cv2.COLOR_BGR2RGB)
+                frame_bgr = picam2.capture_array()
             
             # Predict
             results = model.predict(
@@ -294,7 +292,7 @@ def main():
                     error_info = f"Error X:{error_x} Y:{error_y}"
                     cv2.putText(frame_bgr, error_info, (10, FRAME_HEIGHT - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
                     
-                   # Update Status
+                    # Update Status
                     current_status["radar"] = {
                         "angle": int(error_x),
                         "dist": real_dist,
@@ -318,11 +316,11 @@ def main():
             prev_time = current_time
             cv2.putText(frame_bgr, f"FPS: {fps:.1f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
             
-            # Dashboard Update
+            # Dashboard Update (Needs BGR)
             dashboard.update_frame(frame_bgr)
             dashboard.update_state(current_status)
             
-            # Display
+            # Local Display (Needs RGB on Pi, BGR on Mac)
             # if use_mac:
             #     cv2.imshow("Enemy Detection", frame_bgr)
             # else:
