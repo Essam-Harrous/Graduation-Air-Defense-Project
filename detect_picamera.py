@@ -187,7 +187,7 @@ def main():
         try:
             picam2 = Picamera2()
             config = picam2.create_preview_configuration(
-                main={"size": (FRAME_WIDTH, FRAME_HEIGHT), "format": "BGR888"}
+                main={"size": (FRAME_WIDTH, FRAME_HEIGHT), "format": "RGB888"}
             )
             picam2.configure(config)
             picam2.start()
@@ -225,7 +225,8 @@ def main():
                     print("❌ Failed to capture frame")
                     break
             else:
-                frame_bgr = picam2.capture_array()
+                frame_rgb = picam2.capture_array()
+                frame_bgr = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
             
             # Predict
             results = model.predict(
@@ -316,8 +317,9 @@ def main():
             prev_time = current_time
             cv2.putText(frame_bgr, f"FPS: {fps:.1f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
             
-            # Dashboard Update
-            dashboard.update_frame(frame_bgr)
+            # Dashboard Update - Convert BGR to RGB for web display
+            frame_rgb_display = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+            dashboard.update_frame(frame_rgb_display)
             dashboard.update_state(current_status)
             
             # Display

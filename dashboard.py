@@ -3,7 +3,45 @@ import threading
 import cv2
 import time
 import webbrowser
+import subprocess
 import os
+
+
+def open_browser_pi(url):
+    """Open browser on Raspberry Pi - tries Chromium first, then fallback methods."""
+    # Try Chromium (default on Raspberry Pi OS)
+    try:
+        subprocess.Popen(['chromium-browser', url], 
+                        stdout=subprocess.DEVNULL, 
+                        stderr=subprocess.DEVNULL)
+        return True
+    except FileNotFoundError:
+        pass
+    
+    # Try chromium without -browser suffix
+    try:
+        subprocess.Popen(['chromium', url], 
+                        stdout=subprocess.DEVNULL, 
+                        stderr=subprocess.DEVNULL)
+        return True
+    except FileNotFoundError:
+        pass
+    
+    # Try Firefox
+    try:
+        subprocess.Popen(['firefox', url], 
+                        stdout=subprocess.DEVNULL, 
+                        stderr=subprocess.DEVNULL)
+        return True
+    except FileNotFoundError:
+        pass
+    
+    # Fallback to webbrowser module
+    try:
+        webbrowser.open(url)
+        return True
+    except Exception:
+        return False
 
 class DashboardServer:
     def __init__(self, template_folder='static/templates', static_folder='static'):
@@ -120,5 +158,5 @@ class DashboardServer:
         thread.start()
         
         print(f"✅ Dashboard starting at http://localhost:{port}")
-        webbrowser.open(f"http://localhost:{port}")
-
+        time.sleep(1)  # Give Flask a moment to start
+        open_browser_pi(f"http://localhost:{port}")
