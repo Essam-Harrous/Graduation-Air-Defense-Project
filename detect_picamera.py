@@ -25,7 +25,7 @@ from dashboard import DashboardServer
 # Configuration
 MODEL_PATH = "best.onnx"
 CONFIDENCE_THRESHOLD = 0.5
-INFERENCE_SIZE = 320
+INFERENCE_SIZE = 192  # Reduced from 320 for faster Pi inference
 
 FRAME_WIDTH = 640
 FRAME_HEIGHT = 480
