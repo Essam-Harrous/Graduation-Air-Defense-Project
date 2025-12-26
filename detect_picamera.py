@@ -30,6 +30,49 @@ INFERENCE_SIZE = 320
 FRAME_WIDTH = 640
 FRAME_HEIGHT = 480
 
+# Performance tuning
+PROCESS_EVERY_N_FRAMES = 2  # Run YOLO every N frames (1 = every frame, 2 = every other)
+DASHBOARD_UPDATE_INTERVAL = 0.05  # Minimum seconds between dashboard updates
+
+
+class FrameGrabber:
+    """Threaded camera capture for better FPS."""
+    
+    def __init__(self, camera, is_mac=False):
+        self.camera = camera
+        self.is_mac = is_mac
+        self.frame = None
+        self.lock = threading.Lock()
+        self.running = False
+        self.thread = None
+    
+    def start(self):
+        self.running = True
+        self.thread = threading.Thread(target=self._grab_loop, daemon=True)
+        self.thread.start()
+    
+    def stop(self):
+        self.running = False
+        if self.thread:
+            self.thread.join(timeout=1.0)
+    
+    def _grab_loop(self):
+        while self.running:
+            if self.is_mac:
+                ret, frame = self.camera.read()
+                if ret:
+                    with self.lock:
+                        self.frame = frame
+            else:
+                frame = self.camera.capture_array()
+                with self.lock:
+                    self.frame = frame
+            time.sleep(0.01)  # Small sleep to prevent busy-waiting
+    
+    def get_frame(self):
+        with self.lock:
+            return self.frame.copy() if self.frame is not None else None
+
 arduino_global = None
 
 def find_arduino():
@@ -181,6 +224,7 @@ def main():
         if not cap.isOpened():
             print("❌ Failed to open webcam!")
             return
+        frame_grabber = FrameGrabber(cap, is_mac=True)
     else:
         from picamera2 import Picamera2
         print("📷 Initializing Pi Camera V2...")
@@ -192,9 +236,14 @@ def main():
             picam2.configure(config)
             picam2.start()
             print("Camera started!")
+            frame_grabber = FrameGrabber(picam2, is_mac=False)
         except Exception as e:
             print(f"Camera Init Failed: {e}")
             return
+    
+    # Start threaded frame capture
+    frame_grabber.start()
+    print("✅ Threaded frame capture started")
     
     # Initialize Arduino
     if not args.no_servo:
@@ -215,25 +264,31 @@ def main():
     
     prev_time = time.time()
     fps = 0
+    frame_count = 0
+    last_dashboard_update = 0
+    last_results = None  # Cache detection results for skipped frames
     
     try:
         while True:
-            # Capture
-            if use_mac:
-                ret, frame_bgr = cap.read()
-                if not ret:
-                    print("❌ Failed to capture frame")
-                    break
-            else:
-                frame_bgr = picam2.capture_array()
+            # Get frame from threaded grabber
+            frame_bgr = frame_grabber.get_frame()
+            if frame_bgr is None:
+                time.sleep(0.01)
+                continue
             
-            # Predict
-            results = model.predict(
-                source=frame_bgr,
-                imgsz=INFERENCE_SIZE,
-                conf=CONFIDENCE_THRESHOLD,
-                verbose=False
-            )
+            frame_count += 1
+            
+            # Run YOLO only every N frames
+            if frame_count % PROCESS_EVERY_N_FRAMES == 0 or last_results is None:
+                results = model.predict(
+                    source=frame_bgr,
+                    imgsz=INFERENCE_SIZE,
+                    conf=CONFIDENCE_THRESHOLD,
+                    verbose=False
+                )
+                last_results = results
+            else:
+                results = last_results
             
             # Process Arduino Data (threaded)
             if arduino_global and arduino_global.running:
@@ -316,11 +371,13 @@ def main():
             prev_time = current_time
             cv2.putText(frame_bgr, f"FPS: {fps:.1f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
             
-            # Dashboard Update (Needs BGR for cv2.imencode)
-            # Note: Picamera2 BGR888 returns RGB on some Pi configs, so we convert
-            frame_for_dashboard = cv2.cvtColor(frame_bgr, cv2.COLOR_RGB2BGR)
-            dashboard.update_frame(frame_for_dashboard)
-            dashboard.update_state(current_status)
+            # Dashboard Update (rate-limited)
+            if current_time - last_dashboard_update >= DASHBOARD_UPDATE_INTERVAL:
+                # Note: Picamera2 BGR888 returns RGB on some Pi configs, so we convert
+                frame_for_dashboard = cv2.cvtColor(frame_bgr, cv2.COLOR_RGB2BGR)
+                dashboard.update_frame(frame_for_dashboard)
+                dashboard.update_state(current_status)
+                last_dashboard_update = current_time
             
             # Local Display (Needs RGB on Pi, BGR on Mac)
             # if use_mac:
@@ -336,6 +393,8 @@ def main():
         print("\n👋 System stopped")
     
     finally:
+        # Stop threaded frame grabber
+        frame_grabber.stop()
         if arduino_global:
             send_error_to_arduino(arduino_global, 0, 0)
             arduino_global.close()
