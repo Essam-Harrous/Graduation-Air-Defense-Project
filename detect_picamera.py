@@ -316,8 +316,10 @@ def main():
             prev_time = current_time
             cv2.putText(frame_bgr, f"FPS: {fps:.1f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
             
-            # Dashboard Update (Needs BGR)
-            dashboard.update_frame(frame_bgr)
+            # Dashboard Update (Needs BGR for cv2.imencode)
+            # Note: Picamera2 BGR888 returns RGB on some Pi configs, so we convert
+            frame_for_dashboard = cv2.cvtColor(frame_bgr, cv2.COLOR_RGB2BGR)
+            dashboard.update_frame(frame_for_dashboard)
             dashboard.update_state(current_status)
             
             # Local Display (Needs RGB on Pi, BGR on Mac)
