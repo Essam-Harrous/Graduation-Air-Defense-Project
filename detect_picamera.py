@@ -153,6 +153,8 @@ def main():
     parser.add_argument('--mac', action='store_true', help='Use Mac webcam instead of Pi Camera')
     parser.add_argument('--port', type=str, default=None, help='Arduino serial port')
     parser.add_argument('--no-servo', action='store_true', help='Disable servo control')
+    parser.add_argument('--no-stream', action='store_true', help='Disable video streaming to dashboard (for FPS testing)')
+    parser.add_argument('--debug', action='store_true', help='Print timing debug info for each step')
     args = parser.parse_args()
     
     use_mac = args.mac
@@ -240,6 +242,7 @@ def main():
     try:
         while True:
             # Capture
+            t_start = time.time()
             if use_mac:
                 ret, frame_bgr = cap.read()
                 if not ret:
@@ -247,6 +250,7 @@ def main():
                     break
             else:
                 frame_bgr = picam2.capture_array()
+            t_capture = time.time()
             
             # Predict
             results = model.predict(
@@ -255,6 +259,7 @@ def main():
                 conf=CONFIDENCE_THRESHOLD,
                 verbose=False
             )
+            t_inference = time.time()
             
             # Process Arduino Data (threaded)
             if arduino_global and arduino_global.running:
@@ -374,7 +379,8 @@ def main():
             frame_count += 1
             
             # Dashboard Update (skip frames to improve detection FPS)
-            if frame_count % DASHBOARD_SKIP == 0:
+            t_process = time.time()
+            if frame_count % DASHBOARD_SKIP == 0 and not args.no_stream:
                 cv2.putText(frame_bgr, f"FPS: {fps:.1f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
                 # Note: Picamera2 BGR888 returns RGB on some Pi configs, so we convert
                 if not use_mac:
@@ -384,6 +390,15 @@ def main():
                 dashboard.update_frame(frame_for_dashboard)
             
             dashboard.update_state(current_status)
+            t_dashboard = time.time()
+            
+            # Debug timing output
+            if args.debug and frame_count % 10 == 0:  # Print every 10 frames
+                print(f"[DEBUG] Capture: {(t_capture-t_start)*1000:.1f}ms | "
+                      f"Inference: {(t_inference-t_capture)*1000:.1f}ms | "
+                      f"Process: {(t_process-t_inference)*1000:.1f}ms | "
+                      f"Dashboard: {(t_dashboard-t_process)*1000:.1f}ms | "
+                      f"Total: {(t_dashboard-t_start)*1000:.1f}ms | FPS: {fps:.1f}")
             
             # Local Display (Needs RGB on Pi, BGR on Mac)
             # if use_mac:
