@@ -237,7 +237,11 @@ def main():
     prev_time = time.time()
     fps = 0
     frame_count = 0  # For frame skipping
-    DASHBOARD_SKIP = 3  # Update dashboard every N frames (1=every frame, 2=every other, etc)
+    DASHBOARD_SKIP = 3  # Update dashboard every N frames
+    INFERENCE_SKIP = 2  # Run YOLO every N frames (1=every frame, 2=every other, etc)
+    
+    # Cache for last detection (used when skipping inference)
+    cached_detection = None  # (x1, y1, x2, y2, confidence, class_name, center_x, center_y)
     
     try:
         while True:
@@ -252,13 +256,30 @@ def main():
                 frame_bgr = picam2.capture_array()
             t_capture = time.time()
             
-            # Predict
-            results = model.predict(
-                source=frame_bgr,
-                imgsz=INFERENCE_SIZE,
-                conf=CONFIDENCE_THRESHOLD,
-                verbose=False
-            )
+            # Run YOLO inference (skip frames for speed, reuse cached detection)
+            run_inference = (frame_count % INFERENCE_SKIP == 0)
+            
+            if run_inference:
+                results = model.predict(
+                    source=frame_bgr,
+                    imgsz=INFERENCE_SIZE,
+                    conf=CONFIDENCE_THRESHOLD,
+                    verbose=False
+                )
+                # Extract detection from results
+                cached_detection = None
+                for result in results:
+                    boxes = result.boxes
+                    if len(boxes) > 0:
+                        box = boxes[0]  # First detection
+                        x1, y1, x2, y2 = box.xyxy[0].cpu().numpy().astype(int)
+                        center_x = (x1 + x2) // 2
+                        center_y = (y1 + y2) // 2
+                        confidence = float(box.conf[0])
+                        class_id = int(box.cls[0])
+                        class_name = model.names[class_id]
+                        cached_detection = (x1, y1, x2, y2, confidence, class_name, center_x, center_y)
+                        break
             t_inference = time.time()
             
             # Process Arduino Data (threaded)
@@ -301,60 +322,50 @@ def main():
             # Track if we found an enemy this frame
             enemy_detected_this_frame = False
             
-            for result in results:
-                boxes = result.boxes
-                for box in boxes:
-                    x1, y1, x2, y2 = box.xyxy[0].cpu().numpy().astype(int) 
-                    center_x = (x1 + x2) // 2
-                    center_y = (y1 + y2) // 2
-                    
-                    confidence = float(box.conf[0])
-                    class_id = int(box.cls[0])
-                    class_name = model.names[class_id]
-                    
-                    cv2.rectangle(frame_bgr, (x1, y1), (x2, y2), (0, 255, 0), 2)
-                    cv2.circle(frame_bgr, (center_x, center_y), 5, (0, 0, 255), -1)
-                    
-                    display_name = "enemy" if class_name.lower() == "pepsi" else class_name
-                    label = f"{display_name} ({confidence:.2f})"
-                    
-                    (label_w, label_h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
-                    cv2.rectangle(frame_bgr, (x1, y1 - 40), (x1 + max(label_w, 100), y1), (0, 255, 0), -1)
-                    
-                    cv2.putText(frame_bgr, label, (x1, y1 - 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
-                    
-                    error_x, error_y = calculate_error(center_x, center_y, FRAME_WIDTH, FRAME_HEIGHT)
-                    if not args.no_servo and arduino_global:
-                        send_error_to_arduino(arduino_global, error_x, error_y)
-                    
-                    cv2.line(frame_bgr, (FRAME_WIDTH//2 - 10, FRAME_HEIGHT//2), (FRAME_WIDTH//2 + 10, FRAME_HEIGHT//2), (255, 255, 0), 1)
-                    cv2.line(frame_bgr, (FRAME_WIDTH//2, FRAME_HEIGHT//2 - 10), (FRAME_WIDTH//2, FRAME_HEIGHT//2 + 10), (255, 255, 0), 1)
-                    
-                    error_info = f"Error X:{error_x} Y:{error_y}"
-                    cv2.putText(frame_bgr, error_info, (10, FRAME_HEIGHT - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
-                    
-                    # Update Status
-                    current_status["radar"] = {
-                        "angle": int(error_x),
-                        "dist": real_dist,
-                        "hit": True
-                    }
-                    current_status["lastDetection"] = {
-                        "name": display_name,
-                        "conf": confidence
-                    }
-                    current_status["pan"] = int(error_x)
-                    current_status["tilt"] = int(error_y)
-                    
-                    enemy_detected_this_frame = True
-                    
-                    # Update hit flag on radar
-                    dashboard.state["radar"]["hit"] = True
-                    
-                    if confidence > CONFIDENCE_THRESHOLD:
-                        dashboard.log_event(f"Detected {display_name} (Conf: {confidence:.2f})")
-
-                    break
+            # Use cached detection (from YOLO or previous frame)
+            if cached_detection is not None:
+                x1, y1, x2, y2, confidence, class_name, center_x, center_y = cached_detection
+                
+                cv2.rectangle(frame_bgr, (x1, y1), (x2, y2), (0, 255, 0), 2)
+                cv2.circle(frame_bgr, (center_x, center_y), 5, (0, 0, 255), -1)
+                
+                display_name = "enemy" if class_name.lower() == "pepsi" else class_name
+                label = f"{display_name} ({confidence:.2f})"
+                
+                (label_w, label_h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.6, 2)
+                cv2.rectangle(frame_bgr, (x1, y1 - 40), (x1 + max(label_w, 100), y1), (0, 255, 0), -1)
+                cv2.putText(frame_bgr, label, (x1, y1 - 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
+                
+                error_x, error_y = calculate_error(center_x, center_y, FRAME_WIDTH, FRAME_HEIGHT)
+                if not args.no_servo and arduino_global:
+                    send_error_to_arduino(arduino_global, error_x, error_y)
+                
+                cv2.line(frame_bgr, (FRAME_WIDTH//2 - 10, FRAME_HEIGHT//2), (FRAME_WIDTH//2 + 10, FRAME_HEIGHT//2), (255, 255, 0), 1)
+                cv2.line(frame_bgr, (FRAME_WIDTH//2, FRAME_HEIGHT//2 - 10), (FRAME_WIDTH//2, FRAME_HEIGHT//2 + 10), (255, 255, 0), 1)
+                
+                error_info = f"Error X:{error_x} Y:{error_y}"
+                cv2.putText(frame_bgr, error_info, (10, FRAME_HEIGHT - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+                
+                # Update Status
+                current_status["radar"] = {
+                    "angle": int(error_x),
+                    "dist": real_dist,
+                    "hit": True
+                }
+                current_status["lastDetection"] = {
+                    "name": display_name,
+                    "conf": confidence
+                }
+                current_status["pan"] = int(error_x)
+                current_status["tilt"] = int(error_y)
+                
+                enemy_detected_this_frame = True
+                
+                # Update hit flag on radar
+                dashboard.state["radar"]["hit"] = True
+                
+                if confidence > CONFIDENCE_THRESHOLD and run_inference:
+                    dashboard.log_event(f"Detected {display_name} (Conf: {confidence:.2f})")
             
             # --- Radar-to-Camera Handoff ---
             # If no enemy detected by camera, but radar sees something, point camera there
