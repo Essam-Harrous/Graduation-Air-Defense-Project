@@ -89,14 +89,26 @@ class SerialReader:
                 parts = line[1:].split(',')
                 distance = int(parts[0])
                 angle = int(parts[1]) if len(parts) > 1 else 0
+                
+                # Filter: Ignore > 50cm
                 filtered_dist = 400 if distance > 50 else distance
-                self.latest_data = {
-                    "dist": filtered_dist,
-                    "angle": angle,
-                    "scan": True,
-                    "raw_dist": distance
-                }
+                
+                self.latest_data["dist"] = filtered_dist
+                self.latest_data["angle"] = angle
+                self.latest_data["scan"] = True
+                self.latest_data["raw_dist"] = distance
             except ValueError:
+                pass
+        elif "Pan:" in line:
+            # Debug Format: sErr:x,y Pan:p Tilt:t
+            try:
+                parts = line.split(" ")
+                for p in parts:
+                    if p.startswith("Pan:"):
+                        self.latest_data["pan"] = int(p.split(":")[1])
+                    elif p.startswith("Tilt:"):
+                        self.latest_data["tilt"] = int(p.split(":")[1])
+            except:
                 pass
 
 # Initialize global
@@ -111,6 +123,9 @@ def init_arduino(port=None):
             if "usb" in p.device.lower() or "acm" in p.device.lower():
                 port = p.device
                 break
+        if not port and len(ports) > 0:
+            port = ports[0].device
+            
     if not port:
         print("Warning: Arduino not found. Servo control disabled.")
         return None
@@ -161,13 +176,17 @@ def main():
     dashboard.start(port=8080)
 
     # Load YOLOv8 model
-    print(f"Loading model: {MODEL_PATH}")
-    model = YOLO(MODEL_PATH)
-    print("✅ Model loaded! Warming up inference engine...")
-    # Warmup
-    dummy_frame = np.zeros((INFERENCE_SIZE, INFERENCE_SIZE, 3), dtype=np.uint8)
-    model.predict(source=dummy_frame, imgsz=INFERENCE_SIZE, verbose=False)
-    print("✅ engine ready!")
+    print(f"📦 Loading model: {MODEL_PATH}")
+    try:
+        model = YOLO(MODEL_PATH)
+        print("✅ Model loaded! Warming up inference engine...")
+        # Warmup: Run one dummy inference to trigger ONNX Runtime initialization
+        dummy_frame = np.zeros((INFERENCE_SIZE, INFERENCE_SIZE, 3), dtype=np.uint8)
+        model.predict(source=dummy_frame, imgsz=INFERENCE_SIZE, verbose=False)
+        print("✅ engine ready!")
+    except Exception as e:
+        print(f"❌ Failed to load model: {e}")
+        return
     
     # Initialize Camera
     picam2 = None
@@ -249,6 +268,18 @@ def main():
                 dashboard.state["components"]["ultrasonic"]["val"] = data["raw_dist"]
                 dashboard.state["components"]["scan_servo"]["status"] = "ONLINE"
                 dashboard.state["components"]["scan_servo"]["val"] = data["angle"]
+                # Update Pan/Tilt servos if data available
+                if "pan" in data:
+                    dashboard.state["components"]["pan_servo"]["status"] = "ONLINE"
+                    dashboard.state["components"]["pan_servo"]["val"] = data["pan"]
+                else:
+                    dashboard.state["components"]["pan_servo"]["status"] = "ONLINE"
+                if "tilt" in data:
+                    dashboard.state["components"]["tilt_servo"]["status"] = "ONLINE"
+                    dashboard.state["components"]["tilt_servo"]["val"] = data["tilt"]
+                else:
+                    dashboard.state["components"]["tilt_servo"]["status"] = "ONLINE"
+                
                 dashboard.latest_distance = data["dist"]
             
             # Default status
@@ -259,6 +290,9 @@ def main():
                 "radar": {"angle": 0, "dist": real_dist, "hit": False},
                 "lastDetection": {"name": "-", "conf": 0}
             }
+            
+            # Track if we found an enemy this frame
+            enemy_detected_this_frame = False
             
             for result in results:
                 boxes = result.boxes
@@ -305,10 +339,30 @@ def main():
                     current_status["pan"] = int(error_x)
                     current_status["tilt"] = int(error_y)
                     
+                    enemy_detected_this_frame = True
+                    
+                    # Update hit flag on radar
+                    dashboard.state["radar"]["hit"] = True
+                    
                     if confidence > CONFIDENCE_THRESHOLD:
-                        dashboard.log_event(f"Acquired: {display_name}")
+                        dashboard.log_event(f"Detected {display_name} (Conf: {confidence:.2f})")
 
                     break
+            
+            # --- Radar-to-Camera Handoff ---
+            # If no enemy detected by camera, but radar sees something, point camera there
+            if not enemy_detected_this_frame and not args.no_servo and arduino_global and arduino_global.running:
+                radar_data = arduino_global.latest_data
+                if radar_data["dist"] > 0 and radar_data["dist"] <= 50:
+                    # Use direct Pan Position command (P<angle>)
+                    # Radar scan goes 0-180. Pan servo also 0-180.
+                    target_angle = radar_data["angle"]
+                    
+                    # Send direct position command
+                    command = f"P{int(target_angle)}\n"
+                    arduino_global.write(command.encode())
+                    
+                    dashboard.log_event(f"Radar: Investigating target at {radar_data['angle']}° ({radar_data['dist']}cm)")
             
             # FPS
             current_time = time.time()
@@ -338,7 +392,7 @@ def main():
     finally:
         if arduino_global:
             send_error_to_arduino(arduino_global, 0, 0)
-            arduino_global.close()
+            arduino_global.stop()
         if use_mac and cap:
             cap.release()
         elif picam2:
