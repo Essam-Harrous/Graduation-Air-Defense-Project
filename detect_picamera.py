@@ -108,7 +108,7 @@ def init_arduino(port=None):
     if not port:
         ports = list(serial.tools.list_ports.comports())
         for p in ports:
-            if "usb" in p.device or "ACM" in p.device:
+            if "usb" in p.device.lower() or "acm" in p.device.lower():
                 port = p.device
                 break
     if not port:
