@@ -121,17 +121,20 @@ class DashboardServer:
             return jsonify({"status": "ok"})
 
     def _generate_frames(self):
+        # JPEG encoding params for faster encoding (quality 60 vs default 95)
+        encode_params = [cv2.IMWRITE_JPEG_QUALITY, 60]
         while self.running:
             with self.lock:
                 if self.frame is None:
+                    time.sleep(0.01)
                     continue
-                # Encode frame as JPEG
-                ret, buffer = cv2.imencode('.jpg', self.frame)
+                # Encode frame as JPEG with lower quality for speed
+                ret, buffer = cv2.imencode('.jpg', self.frame, encode_params)
                 frame = buffer.tobytes()
             
             yield (b'--frame\r\n'
                    b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
-            time.sleep(0.05) # Limit to ~20fps for streaming
+            time.sleep(0.033)  # ~30fps max for streaming
 
     def update_frame(self, frame):
         with self.lock:

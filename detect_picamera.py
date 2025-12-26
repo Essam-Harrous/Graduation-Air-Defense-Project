@@ -234,6 +234,8 @@ def main():
     
     prev_time = time.time()
     fps = 0
+    frame_count = 0  # For frame skipping
+    DASHBOARD_SKIP = 3  # Update dashboard every N frames (1=every frame, 2=every other, etc)
     
     try:
         while True:
@@ -364,16 +366,23 @@ def main():
                     
                     dashboard.log_event(f"Radar: Investigating target at {radar_data['angle']}° ({radar_data['dist']}cm)")
             
-            # FPS
+            # FPS calculation (every frame)
             current_time = time.time()
             fps = 1 / (current_time - prev_time)
             prev_time = current_time
-            cv2.putText(frame_bgr, f"FPS: {fps:.1f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
             
-            # Dashboard Update (Needs BGR for cv2.imencode)
-            # Note: Picamera2 BGR888 returns RGB on some Pi configs, so we convert
-            frame_for_dashboard = cv2.cvtColor(frame_bgr, cv2.COLOR_RGB2BGR)
-            dashboard.update_frame(frame_for_dashboard)
+            frame_count += 1
+            
+            # Dashboard Update (skip frames to improve detection FPS)
+            if frame_count % DASHBOARD_SKIP == 0:
+                cv2.putText(frame_bgr, f"FPS: {fps:.1f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+                # Note: Picamera2 BGR888 returns RGB on some Pi configs, so we convert
+                if not use_mac:
+                    frame_for_dashboard = cv2.cvtColor(frame_bgr, cv2.COLOR_RGB2BGR)
+                else:
+                    frame_for_dashboard = frame_bgr
+                dashboard.update_frame(frame_for_dashboard)
+            
             dashboard.update_state(current_status)
             
             # Local Display (Needs RGB on Pi, BGR on Mac)
