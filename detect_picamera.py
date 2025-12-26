@@ -27,12 +27,13 @@ MODEL_PATH = "best.onnx"
 CONFIDENCE_THRESHOLD = 0.5
 INFERENCE_SIZE = 320
 
-FRAME_WIDTH = 640
-FRAME_HEIGHT = 480
+# Camera resolution (lower = faster)
+FRAME_WIDTH = 320
+FRAME_HEIGHT = 240
 
 # Performance tuning
-PROCESS_EVERY_N_FRAMES = 2  # Run YOLO every N frames (1 = every frame, 2 = every other)
-DASHBOARD_UPDATE_INTERVAL = 0.05  # Minimum seconds between dashboard updates
+PROCESS_EVERY_N_FRAMES = 3  # Run YOLO every N frames (higher = faster but less responsive)
+DASHBOARD_UPDATE_INTERVAL = 0.1  # Minimum seconds between dashboard updates
 
 
 class FrameGrabber:
@@ -72,6 +73,60 @@ class FrameGrabber:
     def get_frame(self):
         with self.lock:
             return self.frame.copy() if self.frame is not None else None
+
+
+class AsyncInference:
+    """Run YOLO inference in a separate thread to avoid blocking main loop."""
+    
+    def __init__(self, model, imgsz, conf):
+        self.model = model
+        self.imgsz = imgsz
+        self.conf = conf
+        self.frame_to_process = None
+        self.latest_results = None
+        self.lock = threading.Lock()
+        self.running = False
+        self.thread = None
+    
+    def start(self):
+        self.running = True
+        self.thread = threading.Thread(target=self._inference_loop, daemon=True)
+        self.thread.start()
+    
+    def stop(self):
+        self.running = False
+        if self.thread:
+            self.thread.join(timeout=2.0)
+    
+    def submit_frame(self, frame):
+        """Submit a frame for inference (non-blocking)."""
+        with self.lock:
+            self.frame_to_process = frame.copy()
+    
+    def get_results(self):
+        """Get the latest inference results (non-blocking)."""
+        with self.lock:
+            return self.latest_results
+    
+    def _inference_loop(self):
+        while self.running:
+            frame = None
+            with self.lock:
+                if self.frame_to_process is not None:
+                    frame = self.frame_to_process
+                    self.frame_to_process = None
+            
+            if frame is not None:
+                results = self.model.predict(
+                    source=frame,
+                    imgsz=self.imgsz,
+                    conf=self.conf,
+                    verbose=False
+                )
+                with self.lock:
+                    self.latest_results = results
+            else:
+                time.sleep(0.01)  # Small sleep when no frame to process
 
 arduino_global = None
 
@@ -245,6 +300,11 @@ def main():
     frame_grabber.start()
     print("✅ Threaded frame capture started")
     
+    # Start async inference
+    inference = AsyncInference(model, INFERENCE_SIZE, CONFIDENCE_THRESHOLD)
+    inference.start()
+    print("✅ Async inference started")
+    
     # Initialize Arduino
     if not args.no_servo:
         arduino_global = init_arduino(args.port)
@@ -266,11 +326,10 @@ def main():
     fps = 0
     frame_count = 0
     last_dashboard_update = 0
-    last_results = None  # Cache detection results for skipped frames
     
     try:
         while True:
-            # Get frame from threaded grabber
+            # Get frame from threaded grabber (non-blocking)
             frame_bgr = frame_grabber.get_frame()
             if frame_bgr is None:
                 time.sleep(0.01)
@@ -278,17 +337,12 @@ def main():
             
             frame_count += 1
             
-            # Run YOLO only every N frames
-            if frame_count % PROCESS_EVERY_N_FRAMES == 0 or last_results is None:
-                results = model.predict(
-                    source=frame_bgr,
-                    imgsz=INFERENCE_SIZE,
-                    conf=CONFIDENCE_THRESHOLD,
-                    verbose=False
-                )
-                last_results = results
-            else:
-                results = last_results
+            # Submit frame for async inference every N frames
+            if frame_count % PROCESS_EVERY_N_FRAMES == 0:
+                inference.submit_frame(frame_bgr)
+            
+            # Get latest results (non-blocking, may be from previous frame)
+            results = inference.get_results()
             
             # Process Arduino Data (threaded)
             if arduino_global and arduino_global.running:
@@ -315,7 +369,9 @@ def main():
                 "lastDetection": {"name": "-", "conf": 0}
             }
             
-            for result in results:
+            # Process detection results (may be None if inference hasn't completed yet)
+            if results is not None:
+              for result in results:
                 boxes = result.boxes
                 for box in boxes:
                     x1, y1, x2, y2 = box.xyxy[0].cpu().numpy().astype(int) 
@@ -393,8 +449,9 @@ def main():
         print("\n👋 System stopped")
     
     finally:
-        # Stop threaded frame grabber
+        # Stop threaded frame grabber and inference
         frame_grabber.stop()
+        inference.stop()
         if arduino_global:
             send_error_to_arduino(arduino_global, 0, 0)
             arduino_global.close()
