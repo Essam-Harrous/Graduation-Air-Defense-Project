@@ -380,7 +380,7 @@ def main():
                 if not use_mac:
                     frame_for_dashboard = cv2.cvtColor(frame_bgr, cv2.COLOR_RGB2BGR)
                 else:
-                    frame_for_dashboard = frame_bgr
+                    frame_for_dashboard = frame_bgr.copy()
                 dashboard.update_frame(frame_for_dashboard)
             
             dashboard.update_state(current_status)

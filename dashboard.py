@@ -121,24 +121,37 @@ class DashboardServer:
             return jsonify({"status": "ok"})
 
     def _generate_frames(self):
-        # JPEG encoding params for faster encoding (quality 60 vs default 95)
-        encode_params = [cv2.IMWRITE_JPEG_QUALITY, 60]
+        # JPEG encoding params - lower quality for faster encoding
+        encode_params = [cv2.IMWRITE_JPEG_QUALITY, 40]
+        last_frame = None
+        jpeg_bytes = None
+        
         while self.running:
-            with self.lock:
-                if self.frame is None:
-                    time.sleep(0.01)
-                    continue
-                # Encode frame as JPEG with lower quality for speed
-                ret, buffer = cv2.imencode('.jpg', self.frame, encode_params)
-                frame = buffer.tobytes()
+            # Direct read without lock - atomic in Python
+            current_frame = self.frame
+            if current_frame is None:
+                time.sleep(0.1)
+                continue
             
-            yield (b'--frame\r\n'
-                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
-            time.sleep(0.033)  # ~30fps max for streaming
+            # Only encode if frame reference changed
+            if current_frame is not last_frame:
+                try:
+                    ret, buffer = cv2.imencode('.jpg', current_frame, encode_params)
+                    if ret:
+                        jpeg_bytes = buffer.tobytes()
+                        last_frame = current_frame
+                except Exception:
+                    pass
+            
+            if jpeg_bytes:
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + jpeg_bytes + b'\r\n')
+            
+            time.sleep(0.1)  # 10 FPS max - saves CPU for detection
 
     def update_frame(self, frame):
-        with self.lock:
-            self.frame = frame.copy()
+        # Direct assignment - no copy, no lock (GIL makes this atomic)
+        self.frame = frame
 
     def update_state(self, updates):
         self.state.update(updates)
