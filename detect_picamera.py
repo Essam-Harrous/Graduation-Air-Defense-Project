@@ -238,7 +238,7 @@ def main():
     fps = 0
     frame_count = 0  # For frame skipping
     DASHBOARD_SKIP = 3  # Update dashboard every N frames
-    INFERENCE_SKIP = 2  # Run YOLO every N frames (1=every frame, 2=every other, etc)
+    INFERENCE_SKIP = 1  # Run YOLO every frame (set to 2+ to skip frames)
     
     # Cache for last detection (used when skipping inference)
     cached_detection = None  # (x1, y1, x2, y2, confidence, class_name, center_x, center_y)
