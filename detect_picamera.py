@@ -187,7 +187,7 @@ def main():
         try:
             picam2 = Picamera2()
             config = picam2.create_preview_configuration(
-                main={"size": (FRAME_WIDTH, FRAME_HEIGHT), "format": "RGB888"}
+                main={"size": (FRAME_WIDTH, FRAME_HEIGHT), "format": "BGR888"}
             )
             picam2.configure(config)
             picam2.start()
@@ -225,8 +225,9 @@ def main():
                     print("❌ Failed to capture frame")
                     break
             else:
-                frame_rgb = picam2.capture_array()
-                frame_bgr = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
+                raw_frame = picam2.capture_array()
+                # Fix color swap: Camera BGR config seems to return RGB or vice-versa
+                frame_bgr = cv2.cvtColor(raw_frame, cv2.COLOR_BGR2RGB)
             
             # Predict
             results = model.predict(
