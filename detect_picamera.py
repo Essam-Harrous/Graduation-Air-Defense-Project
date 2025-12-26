@@ -317,9 +317,8 @@ def main():
             prev_time = current_time
             cv2.putText(frame_bgr, f"FPS: {fps:.1f}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
             
-            # Dashboard Update - Convert BGR to RGB for web display
-            frame_rgb_display = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-            dashboard.update_frame(frame_rgb_display)
+            # Dashboard Update
+            dashboard.update_frame(frame_bgr)
             dashboard.update_state(current_status)
             
             # Display
