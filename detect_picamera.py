@@ -214,19 +214,19 @@ def main():
             picam2.configure(config)
             
             # Start with native hardware preview (very low latency on HDMI)
+            # Using DRM preview - outputs directly to HDMI via GPU (no Qt required)
             if not args.no_preview:
                 try:
-                    # Try Qt preview first (works with desktop environment)
-                    from picamera2.previews.qt import QGlPicamera2
-                    picam2.start_preview(Preview.QT, x=0, y=0, width=FRAME_WIDTH, height=FRAME_HEIGHT)
-                    print("✅ Native Qt preview enabled (hardware accelerated)")
-                except Exception:
+                    picam2.start_preview(Preview.DRM, x=0, y=0, width=FRAME_WIDTH, height=FRAME_HEIGHT)
+                    print("✅ Native DRM preview enabled (direct HDMI output)")
+                except Exception as e:
+                    print(f"⚠️ Could not start DRM preview: {e}")
+                    print("   Trying QTGL preview...")
                     try:
-                        # Fallback to DRM preview (works without desktop, direct to HDMI)
-                        picam2.start_preview(Preview.DRM, x=0, y=0, width=FRAME_WIDTH, height=FRAME_HEIGHT)
-                        print("✅ Native DRM preview enabled (direct HDMI output)")
-                    except Exception as e:
-                        print(f"⚠️ Could not start native preview: {e}")
+                        picam2.start_preview(Preview.QTGL, x=0, y=0, width=FRAME_WIDTH, height=FRAME_HEIGHT)
+                        print("✅ Native QTGL preview enabled")
+                    except Exception as e2:
+                        print(f"⚠️ Could not start any native preview: {e2}")
                         print("   Falling back to web-only streaming")
             
             picam2.start()
