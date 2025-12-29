@@ -154,6 +154,7 @@ def main():
     parser.add_argument('--port', type=str, default=None, help='Arduino serial port')
     parser.add_argument('--no-servo', action='store_true', help='Disable servo control')
     parser.add_argument('--no-stream', action='store_true', help='Disable video streaming to dashboard (for FPS testing)')
+    parser.add_argument('--no-preview', action='store_true', help='Disable native Pi camera preview window')
     parser.add_argument('--debug', action='store_true', help='Print timing debug info for each step')
     args = parser.parse_args()
     
@@ -203,7 +204,7 @@ def main():
             print("❌ Failed to open webcam!")
             return
     else:
-        from picamera2 import Picamera2
+        from picamera2 import Picamera2, Preview
         print("📷 Initializing Pi Camera V2...")
         try:
             picam2 = Picamera2()
@@ -211,6 +212,23 @@ def main():
                 main={"size": (FRAME_WIDTH, FRAME_HEIGHT), "format": "BGR888"}
             )
             picam2.configure(config)
+            
+            # Start with native hardware preview (very low latency on HDMI)
+            if not args.no_preview:
+                try:
+                    # Try Qt preview first (works with desktop environment)
+                    from picamera2.previews.qt import QGlPicamera2
+                    picam2.start_preview(Preview.QT, x=0, y=0, width=FRAME_WIDTH, height=FRAME_HEIGHT)
+                    print("✅ Native Qt preview enabled (hardware accelerated)")
+                except Exception:
+                    try:
+                        # Fallback to DRM preview (works without desktop, direct to HDMI)
+                        picam2.start_preview(Preview.DRM, x=0, y=0, width=FRAME_WIDTH, height=FRAME_HEIGHT)
+                        print("✅ Native DRM preview enabled (direct HDMI output)")
+                    except Exception as e:
+                        print(f"⚠️ Could not start native preview: {e}")
+                        print("   Falling back to web-only streaming")
+            
             picam2.start()
             print("Camera started!")
         except Exception as e:
