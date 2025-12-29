@@ -23,7 +23,7 @@ import serial.tools.list_ports
 from dashboard import DashboardServer
 
 # Configuration
-MODEL_PATH = "best.onnx"
+MODEL_PATH = "best_ncnn_model"  # Point to the NCNN model folder
 CONFIDENCE_THRESHOLD = 0.5
 INFERENCE_SIZE = 192  # Re-exported ONNX model at this size for speed
 

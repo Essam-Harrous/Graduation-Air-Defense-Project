@@ -1,0 +1,14 @@
+description: Ultralytics best model trained on dataset_annotated/data.yaml
+author: Ultralytics
+date: '2025-12-30T00:05:35.224234'
+version: 8.3.54
+license: AGPL-3.0 License (https://ultralytics.com/license)
+docs: https://docs.ultralytics.com
+stride: 32
+task: detect
+batch: 1
+imgsz:
+- 320
+- 320
+names:
+  0: pepsi
