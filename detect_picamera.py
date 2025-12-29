@@ -260,11 +260,14 @@ def main():
             run_inference = (frame_count % INFERENCE_SKIP == 0)
             
             if run_inference:
+                # NCNN requires strict NMS limits on Pi to avoid timeout
                 results = model.predict(
                     source=frame_bgr,
                     imgsz=INFERENCE_SIZE,
                     conf=CONFIDENCE_THRESHOLD,
-                    verbose=False
+                    verbose=False,
+                    max_det=2,        # KEY FIX: Limit detections to top 5
+                    agnostic_nms=True # Faster NMS
                 )
                 # Extract detection from results
                 cached_detection = None
