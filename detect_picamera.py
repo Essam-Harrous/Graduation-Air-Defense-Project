@@ -111,6 +111,114 @@ class SerialReader:
             except:
                 pass
 
+class RadarOverlay:
+    """Draws a radar overlay on the camera frame using OpenCV."""
+    
+    def __init__(self, size=150, max_range=50):
+        self.size = size  # Diameter of radar display
+        self.max_range = max_range  # Max distance in cm
+        self.blip_history = []  # Store blips with timestamps for fade effect
+        self.blip_lifetime = 2.0  # Seconds for blips to fade
+        self.displayed_angle = 90  # For smooth animation
+        
+    def draw(self, frame, angle, dist, hit=False):
+        """Draw radar overlay on bottom-right of frame."""
+        h, w = frame.shape[:2]
+        
+        # Radar center position (bottom-right corner)
+        cx = w - self.size // 2 - 10
+        cy = h - 10
+        radius = self.size // 2 - 5
+        
+        # Create overlay for alpha blending
+        overlay = frame.copy()
+        
+        # --- Background circle (semi-transparent) ---
+        cv2.ellipse(overlay, (cx, cy), (radius, radius), 0, 180, 360, (0, 0, 0), -1)
+        
+        # --- Grid: Concentric arcs ---
+        green = (85, 221, 136)  # BGR for radar green
+        dark_green = (40, 100, 60)
+        
+        for scale in [0.25, 0.5, 0.75, 1.0]:
+            r = int(radius * scale)
+            cv2.ellipse(overlay, (cx, cy), (r, r), 0, 180, 360, dark_green, 1)
+        
+        # --- Grid: Spoke lines at 0°, 45°, 90°, 135°, 180° ---
+        for deg in [0, 45, 90, 135, 180]:
+            rad = np.radians(180 + deg)  # Map to semi-circle (180=left, 0=right)
+            x_end = int(cx + np.cos(rad) * radius)
+            y_end = int(cy + np.sin(rad) * radius)
+            cv2.line(overlay, (cx, cy), (x_end, y_end), dark_green, 1)
+        
+        # --- Smooth sweep line animation ---
+        diff = angle - self.displayed_angle
+        self.displayed_angle += diff * 0.15
+        if abs(diff) < 0.5:
+            self.displayed_angle = angle
+        
+        # Draw sweep line
+        sweep_rad = np.radians(180 + (180 - self.displayed_angle))
+        sweep_x = int(cx + np.cos(sweep_rad) * radius)
+        sweep_y = int(cy + np.sin(sweep_rad) * radius)
+        cv2.line(overlay, (cx, cy), (sweep_x, sweep_y), (0, 255, 0), 2)
+        
+        # Draw sweep wedge (glow effect)
+        wedge_pts = [(cx, cy)]
+        for a in range(int(self.displayed_angle) - 5, int(self.displayed_angle) + 6):
+            rad = np.radians(180 + (180 - a))
+            wedge_pts.append((int(cx + np.cos(rad) * radius), int(cy + np.sin(rad) * radius)))
+        wedge_pts.append((cx, cy))
+        if len(wedge_pts) > 2:
+            cv2.fillPoly(overlay, [np.array(wedge_pts)], (0, 180, 0))
+        
+        # --- Add new blip if object detected ---
+        now = time.time()
+        if 0 < dist <= self.max_range:
+            # Avoid duplicate blips at similar angles
+            existing = any(abs(b['angle'] - angle) < 5 and now - b['time'] < 0.2 for b in self.blip_history)
+            if not existing:
+                self.blip_history.append({'angle': angle, 'dist': dist, 'hit': hit, 'time': now})
+        
+        # --- Remove old blips ---
+        self.blip_history = [b for b in self.blip_history if now - b['time'] < self.blip_lifetime]
+        
+        # --- Draw blips with fade ---
+        for blip in self.blip_history:
+            age = now - blip['time']
+            alpha = max(0, 1 - age / self.blip_lifetime)
+            
+            # Calculate blip position
+            pix_dist = (blip['dist'] / self.max_range) * radius
+            blip_rad = np.radians(180 + (180 - blip['angle']))
+            bx = int(cx + np.cos(blip_rad) * pix_dist)
+            by = int(cy + np.sin(blip_rad) * pix_dist)
+            
+            # Color: red for hit, yellow for normal
+            if blip['hit']:
+                color = (0, 0, int(255 * alpha))  # Red BGR
+            else:
+                color = (0, int(255 * alpha), int(255 * alpha))  # Yellow BGR
+            
+            blip_size = int(4 + alpha * 3)
+            cv2.circle(overlay, (bx, by), blip_size, color, -1)
+            
+            # Distance label for fresh blips
+            if alpha > 0.7:
+                cv2.putText(overlay, f"{blip['dist']}cm", (bx + 8, by + 4),
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.35, (255, 255, 255), 1)
+        
+        # --- Labels ---
+        cv2.putText(overlay, "RADAR", (cx - 20, cy - radius - 5),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.4, green, 1)
+        cv2.putText(overlay, f"{self.max_range}cm", (cx + radius - 25, cy - 5),
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.3, dark_green, 1)
+        
+        # --- Blend overlay onto frame ---
+        cv2.addWeighted(overlay, 0.7, frame, 0.3, 0, frame)
+        
+        return frame
+
 # Initialize global
 serial_reader = None
 
@@ -246,6 +354,9 @@ def main():
     
     # Cache for last detection (used when skipping inference)
     cached_detection = None  # (x1, y1, x2, y2, confidence, class_name, center_x, center_y)
+    
+    # Initialize radar overlay for native preview
+    radar_overlay = RadarOverlay(size=160, max_range=50)
     
     try:
         while True:
@@ -417,6 +528,19 @@ def main():
             
             # Local Display Window (on Pi's HDMI via OpenCV)
             if not args.no_preview:
+                # Get radar data for overlay
+                radar_angle = 90
+                radar_dist = 0
+                radar_hit = False
+                if arduino_global and arduino_global.running:
+                    radar_data = arduino_global.latest_data
+                    radar_angle = radar_data.get("angle", 90)
+                    radar_dist = radar_data.get("dist", 0)
+                    radar_hit = cached_detection is not None  # Hit = camera sees target
+                
+                # Draw radar overlay on frame
+                radar_overlay.draw(frame_bgr, radar_angle, radar_dist, radar_hit)
+                
                 # Display frame (Mac uses BGR directly, Pi needs RGB conversion)
                 if use_mac:
                     cv2.imshow("Enemy Detection", frame_bgr)
