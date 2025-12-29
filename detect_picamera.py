@@ -204,7 +204,7 @@ def main():
             print("❌ Failed to open webcam!")
             return
     else:
-        from picamera2 import Picamera2, Preview
+        from picamera2 import Picamera2
         print("📷 Initializing Pi Camera V2...")
         try:
             picam2 = Picamera2()
@@ -213,24 +213,10 @@ def main():
             )
             picam2.configure(config)
             
-            # Start with native hardware preview (very low latency on HDMI)
-            # Using DRM preview - outputs directly to HDMI via GPU (no Qt required)
-            if not args.no_preview:
-                try:
-                    picam2.start_preview(Preview.DRM, x=0, y=0, width=FRAME_WIDTH, height=FRAME_HEIGHT)
-                    print("✅ Native DRM preview enabled (direct HDMI output)")
-                except Exception as e:
-                    print(f"⚠️ Could not start DRM preview: {e}")
-                    print("   Trying QTGL preview...")
-                    try:
-                        picam2.start_preview(Preview.QTGL, x=0, y=0, width=FRAME_WIDTH, height=FRAME_HEIGHT)
-                        print("✅ Native QTGL preview enabled")
-                    except Exception as e2:
-                        print(f"⚠️ Could not start any native preview: {e2}")
-                        print("   Falling back to web-only streaming")
-            
             picam2.start()
-            print("Camera started!")
+            print("✅ Camera started!")
+            if not args.no_preview:
+                print("📺 Local preview window will open (OpenCV)")
         except Exception as e:
             print(f"Camera Init Failed: {e}")
             return
@@ -429,15 +415,19 @@ def main():
                       f"Dashboard: {(t_dashboard-t_process)*1000:.1f}ms | "
                       f"Total: {(t_dashboard-t_start)*1000:.1f}ms | FPS: {fps:.1f}")
             
-            # Local Display (Needs RGB on Pi, BGR on Mac)
-            # if use_mac:
-            #     cv2.imshow("Enemy Detection", frame_bgr)
-            # else:
-            #     frame_rgb_display = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-            #     cv2.imshow("Enemy Detection", frame_rgb_display)
-            
-            # if cv2.waitKey(1) & 0xFF == ord('q'):
-            #     break
+            # Local Display Window (on Pi's HDMI via OpenCV)
+            if not args.no_preview:
+                # Display frame (Mac uses BGR directly, Pi needs RGB conversion)
+                if use_mac:
+                    cv2.imshow("Enemy Detection", frame_bgr)
+                else:
+                    frame_rgb_display = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
+                    cv2.imshow("Enemy Detection", frame_rgb_display)
+                
+                # Check for quit
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    print("\n👋 Quitting...")
+                    break
                 
     except KeyboardInterrupt:
         print("\n👋 System stopped")
