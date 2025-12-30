@@ -487,15 +487,21 @@ def main():
             if not enemy_detected_this_frame and not args.no_servo and arduino_global and arduino_global.running:
                 radar_data = arduino_global.latest_data
                 if radar_data["dist"] > 0 and radar_data["dist"] <= 50:
-                    # Use direct Pan Position command (P<angle>)
-                    # Radar scan goes 0-180. Pan servo also 0-180.
-                    target_angle = radar_data["angle"]
-                    
-                    # Send direct position command
-                    command = f"P{int(target_angle)}\n"
-                    arduino_global.write(command.encode())
-                    
-                    dashboard.log_event(f"Radar: Investigating target at {radar_data['angle']}° ({radar_data['dist']}cm)")
+                    # Cooldown: Only send handoff command once per second
+                    now = time.time()
+                    last_handoff = getattr(main, '_last_handoff_time', 0)
+                    if now - last_handoff > 1.0:
+                        main._last_handoff_time = now
+                        
+                        # Use direct Pan Position command (P<angle>)
+                        # Radar scan goes 0-180. Pan servo also 0-180.
+                        target_angle = radar_data["angle"]
+                        
+                        # Send direct position command
+                        command = f"P{int(target_angle)}\n"
+                        arduino_global.write(command.encode())
+                        
+                        dashboard.log_event(f"Radar: Investigating target at {radar_data['angle']}° ({radar_data['dist']}cm)")
             
             # FPS calculation (every frame)
             current_time = time.time()

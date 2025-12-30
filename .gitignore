@@ -9,7 +9,6 @@ __pycache__/
 
 # Training data (too large for git)
 dataset_annotated/
-arduino_servo_control/
 train_images/
 test_images/
 runs/
