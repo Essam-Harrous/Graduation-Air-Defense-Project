@@ -62,6 +62,10 @@ float smoothErrorY = 0;
 // Tracking state
 unsigned long lastTargetTime = 0;
 
+// Manual fire mode
+bool manualLaserMode = false;  // When true, laser controlled by Python
+bool manualLaserState = false; // Laser state when in manual mode
+
 // Serial buffer
 char inputBuffer[32];
 int bufferIndex = 0;
@@ -171,7 +175,13 @@ void updateBuzzerAndLaser() {
   
   if (isEnemy) {
     // Enemy Detected Mode
-    digitalWrite(LASER_PIN, HIGH); // Laser ON
+    
+    // Laser: Only auto-control if NOT in manual mode
+    if (!manualLaserMode) {
+      digitalWrite(LASER_PIN, HIGH); // Auto laser ON
+    } else {
+      digitalWrite(LASER_PIN, manualLaserState ? HIGH : LOW);
+    }
     
     // Alarm Sound: Fast Beep (100ms ON, 100ms OFF)
     int cycle = millis() % 200;
@@ -225,6 +235,27 @@ void parseCommand(char* cmd) {
     panServo.write((int)panAngle);
     Serial.print("Pan direct: ");
     Serial.println((int)panAngle);
+    return;
+  }
+  
+  // Manual Mode Command: M1 = enable, M0 = disable
+  if (cmd[0] == 'M') {
+    manualLaserMode = (cmd[1] == '1');
+    if (!manualLaserMode) {
+      manualLaserState = false; // Reset laser state when disabling manual
+    }
+    Serial.print("Manual mode: ");
+    Serial.println(manualLaserMode ? "ON" : "OFF");
+    return;
+  }
+  
+  // Laser Command: L1 = on, L0 = off (only works in manual mode)
+  if (cmd[0] == 'L') {
+    if (manualLaserMode) {
+      manualLaserState = (cmd[1] == '1');
+      Serial.print("Laser: ");
+      Serial.println(manualLaserState ? "ON" : "OFF");
+    }
     return;
   }
 

@@ -163,19 +163,40 @@ def main():
     # Initialize Dashboard
     dashboard = DashboardServer()
     
+    # Manual fire state
+    fire_engaged = False  # True when FIRE clicked and target acquired
+    last_enemy_time = 0   # Time when enemy was last seen (for hold period)
+    FIRE_HOLD_TIME = 5.0  # Seconds to hold before disengaging laser
+    
     # Define Dashboard callbacks
     def on_center():
         if arduino_global:
-            # Send 'C' command to center servos (requires updated Arduino sketch)
             arduino_global.write(b'C\n')
             print("[Command] Centering Servos")
+    
+    def on_arm(armed):
+        nonlocal fire_engaged
+        if arduino_global:
+            # Send M1 to enable manual mode, M0 to disable
+            cmd = b'M1\n' if armed else b'M0\n'
+            arduino_global.write(cmd)
+            print(f"[Command] Manual mode {'ENABLED' if armed else 'DISABLED'}")
+        if not armed:
+            fire_engaged = False  # Reset fire state when disarming
             
     def on_fire():
-        # Placeholder for fire command
-        # if arduino_global: arduino_global.write(b'FIRE\n')
-        print("[Command] FIRE!")
+        nonlocal fire_engaged
+        # Only engage if camera currently sees an enemy
+        if dashboard.state.get('lastDetection', {}).get('conf', 0) > CONFIDENCE_THRESHOLD:
+            fire_engaged = True
+            if arduino_global:
+                arduino_global.write(b'L1\n')  # Turn laser ON
+            print("[Command] FIRE! Laser engaged")
+        else:
+            print("[Command] FIRE failed - no target acquired")
 
     dashboard.on_center = on_center
+    dashboard.on_arm = on_arm
     dashboard.on_fire = on_fire
     
     # Start Dashboard
@@ -331,6 +352,19 @@ def main():
                         dashboard.log_event(f"Detected {display_name} (Conf: {confidence:.2f})")
 
                     break # Track first only
+            
+            # Update last enemy time if detected
+            if enemy_detected_this_frame:
+                last_enemy_time = time.time()
+            
+            # --- Manual Fire Mode: Turn off laser when enemy lost for > 5 seconds ---
+            if not enemy_detected_this_frame and fire_engaged:
+                time_since_enemy = time.time() - last_enemy_time
+                if time_since_enemy > FIRE_HOLD_TIME:
+                    fire_engaged = False
+                    if arduino_global:
+                        arduino_global.write(b'L0\n')  # Turn laser OFF
+                    dashboard.log_event("Target lost for 5s - laser disengaged")
             
             # --- Radar-to-Camera Handoff ---
             # If no enemy detected by camera, but radar sees something, point camera there
