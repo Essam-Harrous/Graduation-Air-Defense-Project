@@ -150,14 +150,18 @@ class RadarOverlay:
             r = int(radius * scale)
             cv2.ellipse(overlay, (cx, cy), (r, r), 0, 180, 360, dark_green, 1)
         
-        # --- Grid: Spoke lines at 0°, 45°, 90°, 135°, 180° servo positions ---
-        for servo_deg in [0, 45, 90, 135, 180]:
+        # --- Grid: Spoke lines every 15° for denser grid (0°, 15°, 30°, ... 180°) ---
+        for servo_deg in range(0, 181, 15):  # 0, 15, 30, 45, ... 180 (13 lines)
             # Map servo angle to screen angle:
             # Servo 0° = screen 180° (left), servo 180° = screen 360° (right)
             screen_rad = np.radians(180 + servo_deg)
             x_end = int(cx + np.cos(screen_rad) * radius)
             y_end = int(cy + np.sin(screen_rad) * radius)
-            cv2.line(overlay, (cx, cy), (x_end, y_end), dark_green, 1)
+            # Make major lines (0, 45, 90, 135, 180) slightly brighter
+            if servo_deg % 45 == 0:
+                cv2.line(overlay, (cx, cy), (x_end, y_end), dark_green, 1)
+            else:
+                cv2.line(overlay, (cx, cy), (x_end, y_end), (30, 70, 40), 1)  # Dimmer for minor lines
         
         # --- Direct angle tracking (no smoothing for real-time sync with physical servo) ---
         self.displayed_angle = angle
