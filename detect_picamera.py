@@ -122,7 +122,12 @@ class RadarOverlay:
         self.displayed_angle = 90  # For smooth animation
         
     def draw(self, frame, angle, dist, hit=False):
-        """Draw radar overlay on bottom-right of frame."""
+        """Draw radar overlay on bottom-right of frame.
+        
+        Angle mapping: Servo 0° = right side, 180° = left side
+        OpenCV coordinates: 0° = right (3 o'clock), angles increase counter-clockwise
+        For top semicircle: we draw from 180° (left) to 0° (right) = 180 to 360 in OpenCV
+        """
         h, w = frame.shape[:2]
         
         # Radar center position (bottom-right corner)
@@ -133,7 +138,8 @@ class RadarOverlay:
         # Create overlay for alpha blending
         overlay = frame.copy()
         
-        # --- Background circle (semi-transparent) ---
+        # --- Background semicircle (top half, going up from center) ---
+        # OpenCV ellipse: 180° to 360° draws bottom half, 180° to 0° (or -180 to 0) draws top half
         cv2.ellipse(overlay, (cx, cy), (radius, radius), 0, 180, 360, (0, 0, 0), -1)
         
         # --- Grid: Concentric arcs ---
@@ -144,30 +150,31 @@ class RadarOverlay:
             r = int(radius * scale)
             cv2.ellipse(overlay, (cx, cy), (r, r), 0, 180, 360, dark_green, 1)
         
-        # --- Grid: Spoke lines at 0°, 45°, 90°, 135°, 180° ---
-        for deg in [0, 45, 90, 135, 180]:
-            rad = np.radians(180 + deg)  # Map to semi-circle (180=left, 0=right)
-            x_end = int(cx + np.cos(rad) * radius)
-            y_end = int(cy + np.sin(rad) * radius)
+        # --- Grid: Spoke lines at 0°, 45°, 90°, 135°, 180° servo positions ---
+        for servo_deg in [0, 45, 90, 135, 180]:
+            # Map servo angle to screen angle:
+            # Servo 0° = screen 360° (right), servo 180° = screen 180° (left)
+            screen_rad = np.radians(360 - servo_deg)
+            x_end = int(cx + np.cos(screen_rad) * radius)
+            y_end = int(cy + np.sin(screen_rad) * radius)
             cv2.line(overlay, (cx, cy), (x_end, y_end), dark_green, 1)
         
-        # --- Smooth sweep line animation ---
-        diff = angle - self.displayed_angle
-        self.displayed_angle += diff * 0.15
-        if abs(diff) < 0.5:
-            self.displayed_angle = angle
+        # --- Direct angle tracking (no smoothing for real-time sync with physical servo) ---
+        self.displayed_angle = angle
         
         # Draw sweep line
-        sweep_rad = np.radians(180 + (180 - self.displayed_angle))
-        sweep_x = int(cx + np.cos(sweep_rad) * radius)
-        sweep_y = int(cy + np.sin(sweep_rad) * radius)
+        # Map servo angle (0-180) to screen angle:
+        # Servo 0° → screen 360° (right), Servo 180° → screen 180° (left)
+        sweep_screen_rad = np.radians(360 - self.displayed_angle)
+        sweep_x = int(cx + np.cos(sweep_screen_rad) * radius)
+        sweep_y = int(cy + np.sin(sweep_screen_rad) * radius)
         cv2.line(overlay, (cx, cy), (sweep_x, sweep_y), (0, 255, 0), 2)
         
         # Draw sweep wedge (glow effect)
         wedge_pts = [(cx, cy)]
         for a in range(int(self.displayed_angle) - 5, int(self.displayed_angle) + 6):
-            rad = np.radians(180 + (180 - a))
-            wedge_pts.append((int(cx + np.cos(rad) * radius), int(cy + np.sin(rad) * radius)))
+            screen_rad = np.radians(360 - a)
+            wedge_pts.append((int(cx + np.cos(screen_rad) * radius), int(cy + np.sin(screen_rad) * radius)))
         wedge_pts.append((cx, cy))
         if len(wedge_pts) > 2:
             cv2.fillPoly(overlay, [np.array(wedge_pts)], (0, 180, 0))
@@ -188,11 +195,11 @@ class RadarOverlay:
             age = now - blip['time']
             alpha = max(0, 1 - age / self.blip_lifetime)
             
-            # Calculate blip position
+            # Calculate blip position using same mapping
             pix_dist = (blip['dist'] / self.max_range) * radius
-            blip_rad = np.radians(180 + (180 - blip['angle']))
-            bx = int(cx + np.cos(blip_rad) * pix_dist)
-            by = int(cy + np.sin(blip_rad) * pix_dist)
+            blip_screen_rad = np.radians(360 - blip['angle'])
+            bx = int(cx + np.cos(blip_screen_rad) * pix_dist)
+            by = int(cy + np.sin(blip_screen_rad) * pix_dist)
             
             # Color: red for hit, yellow for normal
             if blip['hit']:
