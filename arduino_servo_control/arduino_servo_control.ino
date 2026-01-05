@@ -128,8 +128,8 @@ void loop() {
      delayMicroseconds(10);
      digitalWrite(TRIG_PIN, LOW);
      
-     // Timeout after 25ms (approx 4 meters max distance)
-     long duration = pulseIn(ECHO_PIN, HIGH, 25000); 
+     // Timeout after 15ms (approx 2.5 meters max distance - faster response)
+     long duration = pulseIn(ECHO_PIN, HIGH, 15000); 
      
      int distanceCm = 0;
      if (duration == 0) {
@@ -153,7 +153,7 @@ void loop() {
   // --- Radar Scan Logic (AFTER blocking code) ---
   static unsigned long lastScanTime = 0;
   
-  if (millis() - lastScanTime > 25) { // 25ms for smoother motion
+  if (millis() - lastScanTime > 32) { // 32ms (~25% slower for better detection)
       lastScanTime = millis();
       scanAngle += scanDir;
       

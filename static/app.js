@@ -120,7 +120,7 @@ let displayedAngle = 90;
 
 // Blip persistence - store detected objects with timestamps
 const blipHistory = [];
-const BLIP_LIFETIME_MS = 2000; // Blips fade over 2 seconds
+const BLIP_LIFETIME_MS = 3000; // Blips fade over 3 seconds (matches ~3s sweep)
 
 function drawRadarFrame() {
   const w = radarCanvas.width;

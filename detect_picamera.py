@@ -118,7 +118,7 @@ class RadarOverlay:
         self.size = size  # Diameter of radar display
         self.max_range = max_range  # Max distance in cm
         self.blip_history = []  # Store blips with timestamps for fade effect
-        self.blip_lifetime = 2.0  # Seconds for blips to fade
+        self.blip_lifetime = 3.0  # Seconds for blips to fade (matches ~3s sweep)
         self.displayed_angle = 90  # For smooth animation
         
     def draw(self, frame, angle, dist, hit=False):
