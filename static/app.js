@@ -60,7 +60,7 @@ async function refresh() {
           </tr>`;
       }
       html += "</table>";
-      compDiv.innerHTML = "<div class='ptitle'>SYSTEM HEALTH</div>" + html;
+      compDiv.innerHTML = "<div class='ptitle'>COMPONENT STATUS</div>" + html;
   }
 
   renderLog(s.log);
@@ -68,18 +68,19 @@ async function refresh() {
 }
 
 function createCompStatus() {
-    const div = document.createElement("div");
-    div.id = "comp-status";
-    div.className = "panel";
-    div.style.marginTop = "14px";
-    // Insert after video Panel
-    const videoPanel = document.querySelector(".panel");
-    videoPanel.parentElement.insertBefore(div, videoPanel.nextSibling);
-    // Actually layout might break, let's just append to side panel or make it floating?
-    // User asked for dashboard component status. Let's put it in the "side" column for better layout.
+    // Use the existing placeholder div in the HTML
+    const div = document.getElementById("comp-status");
+    if (div) {
+        div.style.marginTop = "14px";
+        return div;
+    }
+    // Fallback: create a new div if placeholder doesn't exist
+    const newDiv = document.createElement("div");
+    newDiv.id = "comp-status";
+    newDiv.style.marginTop = "14px";
     const side = document.querySelector(".side");
-    side.appendChild(div);
-    return div;
+    side.appendChild(newDiv);
+    return newDiv;
 }
 
 document.getElementById("center").onclick = async () => {
