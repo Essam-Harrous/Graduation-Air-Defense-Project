@@ -536,7 +536,9 @@ def main():
                         
                         # Use direct Pan Position command (P<angle>)
                         # Radar scan goes 0-180. Pan servo also 0-180.
-                        target_angle = radar_data["angle"]
+                        # INVERT the angle because pan servo is mounted opposite to radar
+                        # Radar 0° (right) → Pan 180°, Radar 180° (left) → Pan 0°
+                        target_angle = 180 - radar_data["angle"]
                         
                         # Send direct position command
                         command = f"P{int(target_angle)}\n"
