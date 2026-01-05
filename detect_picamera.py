@@ -153,8 +153,8 @@ class RadarOverlay:
         # --- Grid: Spoke lines at 0°, 45°, 90°, 135°, 180° servo positions ---
         for servo_deg in [0, 45, 90, 135, 180]:
             # Map servo angle to screen angle:
-            # Servo 0° = screen 360° (right), servo 180° = screen 180° (left)
-            screen_rad = np.radians(360 - servo_deg)
+            # Servo 0° = screen 180° (left), servo 180° = screen 360° (right)
+            screen_rad = np.radians(180 + servo_deg)
             x_end = int(cx + np.cos(screen_rad) * radius)
             y_end = int(cy + np.sin(screen_rad) * radius)
             cv2.line(overlay, (cx, cy), (x_end, y_end), dark_green, 1)
@@ -164,8 +164,8 @@ class RadarOverlay:
         
         # Draw sweep line
         # Map servo angle (0-180) to screen angle:
-        # Servo 0° → screen 360° (right), Servo 180° → screen 180° (left)
-        sweep_screen_rad = np.radians(360 - self.displayed_angle)
+        # Servo 0° → screen 180° (left), Servo 180° → screen 360° (right)
+        sweep_screen_rad = np.radians(180 + self.displayed_angle)
         sweep_x = int(cx + np.cos(sweep_screen_rad) * radius)
         sweep_y = int(cy + np.sin(sweep_screen_rad) * radius)
         cv2.line(overlay, (cx, cy), (sweep_x, sweep_y), (0, 255, 0), 2)
@@ -173,7 +173,7 @@ class RadarOverlay:
         # Draw sweep wedge (glow effect)
         wedge_pts = [(cx, cy)]
         for a in range(int(self.displayed_angle) - 5, int(self.displayed_angle) + 6):
-            screen_rad = np.radians(360 - a)
+            screen_rad = np.radians(180 + a)
             wedge_pts.append((int(cx + np.cos(screen_rad) * radius), int(cy + np.sin(screen_rad) * radius)))
         wedge_pts.append((cx, cy))
         if len(wedge_pts) > 2:
@@ -197,7 +197,7 @@ class RadarOverlay:
             
             # Calculate blip position using same mapping
             pix_dist = (blip['dist'] / self.max_range) * radius
-            blip_screen_rad = np.radians(360 - blip['angle'])
+            blip_screen_rad = np.radians(180 + blip['angle'])
             bx = int(cx + np.cos(blip_screen_rad) * pix_dist)
             by = int(cy + np.sin(blip_screen_rad) * pix_dist)
             
@@ -536,9 +536,7 @@ def main():
                         
                         # Use direct Pan Position command (P<angle>)
                         # Radar scan goes 0-180. Pan servo also 0-180.
-                        # INVERT the angle because pan servo is mounted opposite to radar
-                        # Radar 0° (right) → Pan 180°, Radar 180° (left) → Pan 0°
-                        target_angle = 180 - radar_data["angle"]
+                        target_angle = radar_data["angle"]
                         
                         # Send direct position command
                         command = f"P{int(target_angle)}\n"
