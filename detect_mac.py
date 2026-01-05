@@ -389,6 +389,10 @@ def main():
                         command = f"P{int(target_angle)}\n"
                         arduino_global.write(command.encode())
                         
+                        # Update dashboard pan value to reflect radar handoff
+                        dashboard.update_state({"pan": int(target_angle)})
+                        dashboard.state["components"]["pan_servo"]["val"] = int(target_angle)
+                        
                         dashboard.log_event(f"Radar: Investigating target at {radar_data['angle']}° ({radar_data['dist']}cm)")
             
             # FPS
