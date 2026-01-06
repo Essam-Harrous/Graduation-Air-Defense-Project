@@ -328,6 +328,14 @@ def main():
                     
                     # Arduino Control - Follow enemy with camera
                     error_x, error_y = calculate_error(center_x, center_y, FRAME_WIDTH, FRAME_HEIGHT)
+                    
+                    # Deadzone: If error is small, send zero to stop servo movement
+                    DEADZONE = 20  # pixels
+                    if abs(error_x) < DEADZONE:
+                        error_x = 0
+                    if abs(error_y) < DEADZONE:
+                        error_y = 0
+                    
                     send_error_to_arduino(arduino_global, error_x, error_y)
                     
                     enemy_detected_this_frame = True

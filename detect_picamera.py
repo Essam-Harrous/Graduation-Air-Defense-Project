@@ -480,6 +480,14 @@ def main():
                 cv2.putText(frame_bgr, label, (x1, y1 - 25), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 0), 2)
                 
                 error_x, error_y = calculate_error(center_x, center_y, FRAME_WIDTH, FRAME_HEIGHT)
+                
+                # Deadzone: If error is small, send zero to stop servo movement
+                DEADZONE = 20  # pixels
+                if abs(error_x) < DEADZONE:
+                    error_x = 0
+                if abs(error_y) < DEADZONE:
+                    error_y = 0
+                
                 if not args.no_servo and arduino_global:
                     send_error_to_arduino(arduino_global, error_x, error_y)
                 
