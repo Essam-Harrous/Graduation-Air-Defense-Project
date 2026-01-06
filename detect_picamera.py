@@ -525,7 +525,9 @@ def main():
             
             # --- Radar-to-Camera Handoff ---
             # If no enemy detected by camera, but radar sees something, point camera there
-            if not enemy_detected_this_frame and not args.no_servo and arduino_global and arduino_global.running:
+            # Wait 2 seconds after losing enemy to give AI time to re-identify before following radar
+            time_since_enemy = time.time() - last_enemy_time
+            if not enemy_detected_this_frame and not args.no_servo and arduino_global and arduino_global.running and time_since_enemy > 2.0:
                 radar_data = arduino_global.latest_data
                 if radar_data["dist"] > 0 and radar_data["dist"] <= 50:
                     # Cooldown: Only send handoff command once per second
