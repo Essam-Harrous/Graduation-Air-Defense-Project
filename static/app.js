@@ -34,7 +34,7 @@ async function refresh() {
   }
 
   document.getElementById("st").textContent = s.state;
-  document.getElementById("rad").textContent = `ANG ${s.radar.angle} | ${s.radar.dist}cm | HIT ${s.radar.hit}`;
+  document.getElementById("rad").textContent = `ANG ${s.radar.angle} | ${s.radar.dist}cm | HIT ${s.radar.hit ?? false}`;
   document.getElementById("pt").textContent = `${s.pan} / ${s.tilt}`;
   document.getElementById("det").textContent = `${s.lastDetection.name} (${(s.lastDetection.conf||0).toFixed(2)})`;
   document.getElementById("aa").textContent = `${s.autoAlarmRemaining.toFixed(1)}s`;

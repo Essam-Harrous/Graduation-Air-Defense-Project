@@ -40,3 +40,10 @@ body{background:#0b0f0b;color:#e8f5e9}
 #comp-status td{padding:4px;border-bottom:1px solid rgba(255,255,255,0.05)}
 .c-on{color:#5d8;font-weight:bold}
 .c-off{color:#f44}
+
+/* Status Grid */
+.status-grid{display:flex;flex-direction:column;gap:4px;margin:10px 0;padding:8px;border:1px solid #2d3f2d;border-radius:8px;background:rgba(0,0,0,.25)}
+.stat{display:flex;justify-content:space-between;font-size:11px;padding:4px 6px;border-bottom:1px solid rgba(255,255,255,0.05)}
+.stat:last-child{border-bottom:none}
+.stat .label{color:#5d8;font-weight:bold;letter-spacing:1px}
+.stat span:last-child{color:#cfd8dc;font-family:monospace}
