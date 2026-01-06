@@ -90,8 +90,8 @@ class SerialReader:
                 distance = int(parts[0])
                 angle = int(parts[1]) if len(parts) > 1 else 0
                 
-                # Filter: Ignore > 50cm
-                filtered_dist = 400 if distance > 50 else distance
+                # Filter: Ignore > 100cm
+                filtered_dist = 400 if distance > 100 else distance
                 
                 self.latest_data["dist"] = filtered_dist
                 self.latest_data["angle"] = angle
@@ -370,7 +370,7 @@ def main():
             # If no enemy detected by camera, but radar sees something, point camera there
             if not enemy_detected_this_frame and arduino_global and arduino_global.running:
                 radar_data = arduino_global.latest_data
-                if radar_data["dist"] > 0 and radar_data["dist"] <= 50:
+                if radar_data["dist"] > 0 and radar_data["dist"] <= 100:
                     # Cooldown: Only send handoff command once per second
                     now = time.time()
                     last_handoff = getattr(main, '_last_handoff_time', 0)

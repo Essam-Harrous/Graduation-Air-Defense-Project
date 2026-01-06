@@ -207,7 +207,7 @@ function drawRadarFrame() {
   const now = Date.now();
   
   // Add new blip to history if object detected
-  if (radarState.dist > 0 && radarState.dist <= 50) {
+  if (radarState.dist > 0 && radarState.dist <= 100) {
       // Check if we already have a recent blip at similar angle (avoid duplicates)
       const existingBlip = blipHistory.find(b => Math.abs(b.angle - radarState.angle) < 5 && now - b.timestamp < 200);
       if (!existingBlip) {
@@ -230,7 +230,7 @@ function drawRadarFrame() {
       const age = now - blip.timestamp;
       const alpha = Math.max(0, 1 - (age / BLIP_LIFETIME_MS));
       
-      const pixDist = (blip.dist / 50) * radius;
+      const pixDist = (blip.dist / 100) * radius;
       const blipRad = Math.PI + ((180 - blip.angle) / 180) * Math.PI;
       
       const blipX = cx + Math.cos(blipRad) * pixDist;
@@ -264,7 +264,7 @@ function drawRadarFrame() {
   ctx.fillStyle = "rgba(85, 221, 136, 0.6)";
   ctx.font = "10px monospace";
   ctx.fillText("RADAR LINK: ONLINE", 10, h-5);
-  ctx.fillText("RANGE: 50cm", w - 70, h-5);
+  ctx.fillText("RANGE: 100cm", w - 75, h-5);
   
   requestAnimationFrame(drawRadarFrame);
 }

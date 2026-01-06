@@ -90,8 +90,8 @@ class SerialReader:
                 distance = int(parts[0])
                 angle = int(parts[1]) if len(parts) > 1 else 0
                 
-                # Filter: Ignore > 50cm
-                filtered_dist = 400 if distance > 50 else distance
+                # Filter: Ignore > 100cm
+                filtered_dist = 400 if distance > 100 else distance
                 
                 self.latest_data["dist"] = filtered_dist
                 self.latest_data["angle"] = angle
@@ -114,7 +114,7 @@ class SerialReader:
 class RadarOverlay:
     """Draws a radar overlay on the camera frame using OpenCV."""
     
-    def __init__(self, size=150, max_range=50):
+    def __init__(self, size=150, max_range=100):
         self.size = size  # Diameter of radar display
         self.max_range = max_range  # Max distance in cm
         self.blip_history = []  # Store blips with timestamps for fade effect
@@ -384,7 +384,7 @@ def main():
     cached_detection = None  # (x1, y1, x2, y2, confidence, class_name, center_x, center_y)
     
     # Initialize radar overlay for native preview
-    radar_overlay = RadarOverlay(size=160, max_range=50)
+    radar_overlay = RadarOverlay(size=160, max_range=100)
     
     try:
         while True:
@@ -527,7 +527,7 @@ def main():
             # If no enemy detected by camera, but radar sees something, point camera there
             if not enemy_detected_this_frame and not args.no_servo and arduino_global and arduino_global.running:
                 radar_data = arduino_global.latest_data
-                if radar_data["dist"] > 0 and radar_data["dist"] <= 50:
+                if radar_data["dist"] > 0 and radar_data["dist"] <= 100:
                     # Cooldown: Only send handoff command once per second
                     now = time.time()
                     last_handoff = getattr(main, '_last_handoff_time', 0)
