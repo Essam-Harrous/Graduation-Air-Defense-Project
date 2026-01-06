@@ -257,7 +257,7 @@ def calculate_error(center_x, center_y, frame_width, frame_height):
     frame_center_x = frame_width // 2
     frame_center_y = frame_height // 2
     error_x = center_x - frame_center_x
-    error_y = center_y - frame_center_y
+    error_y = frame_center_y - center_y  # Inverted for correct servo direction
     return error_x, error_y
 
 def main():
