@@ -57,7 +57,7 @@ Open http://localhost:8080 in your browser.
 
 ## 📡 Features
 
-- **YOLO Detection**: Real-time enemy detection with trained model
+- **YOLO Detection**: Real-time enemy detection using **YOLOv8 Nano (v8n)** (~3M params, 192x192 resolution)
 - **Servo Tracking**: Pan/tilt follows detected targets
 - **Radar Scanning**: 180° ultrasonic sweep with distance detection
 - **Dashboard**: Live video, radar display, component status
